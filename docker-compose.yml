@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  python-chassis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # command: uvicorn chassis_app.performer:api --port 8000 --host 0.0.0.0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  redis:
+    image: "redis:alpine"
+    command: redis-server --include /usr/local/etc/redis/redis.conf
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf

@@ -1,0 +1,46 @@
+[tool.black]
+line-length = 120
+
+[tool.pylint.format]
+max-line-length = "120"
+
+[tool.pylint.messages_control]
+disable = "C0330, C0326"
+
+[tool.isort]
+profile = 'black'
+
+[tool.poetry]
+name = "python-chassis"
+version = "0.0.1"
+description = "Python Template code base"
+authors = ["Shubham Chaudhary <shubham@chaudhary.xyz>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+click = "^8.1"
+loguru = "^0.7"
+python-dotenv = "^1.0"
+uvicorn = "^0.30.6"
+fastapi = "^0.112.1"
+pydantic = "^2.8.2"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^23.9.1"
+pytest = "^7.4.2"
+coverage = "^7.3.1"
+pre-commit = "^3.4.0"
+
+[tool.poetry.group.docs]
+optional = true
+[tool.poetry.group.docs.dependencies]
+Sphinx = "^7.2.6"
+
+[tool.poetry.scripts]
+inbound-tasks-api = "lineage.queue.inbound_tasks_api:api"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

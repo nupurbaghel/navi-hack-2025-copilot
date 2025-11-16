@@ -1,0 +1,23 @@
+.git
+.editorconfig
+Makefile
+README.md
+LICENSE
+NOTICE
+
+**/*.iml
+
+# Go Lang
+*.cov
+coverage.html
+
+# Mine
+
+# Git
+.idea/
+.vscode/
+
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
