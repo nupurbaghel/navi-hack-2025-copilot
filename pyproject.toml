@@ -14,29 +14,29 @@ profile = 'black'
 name = "aviation-hackathon-sf"
 version = "0.0.1"
 description = "aviation-hackathon-sf code base"
-authors = ["Shubham Chaudhary <shubham@chaudhary.xyz>"]
+authors = ["Shubham Chaudhary <shubham@chaudhary.xyz>", "Nupur Baghel", "Chelsey"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
-click = "^8.1"
-loguru = "^0.7"
-python-dotenv = "^1.0"
-uvicorn = "^0.30.6"
-fastapi = "^0.112.1"
-pydantic = "^2.8.2"
+python = "^3.13"
+click = "^8.3.1"
+loguru = "^0.7.3"
+python-dotenv = "^1.2.1"
+uvicorn = "^0.38.0"
+fastapi = "^0.121.2"
+pydantic = "^2.12.4"
 
 
 [tool.poetry.group.dev.dependencies]
-black = "^23.9.1"
-pytest = "^7.4.2"
-coverage = "^7.3.1"
-pre-commit = "^3.4.0"
+black = "^25.11.0"
+pytest = "^9.0.1"
+coverage = "^7.11.3"
+pre-commit = "^4.4.0"
 
 [tool.poetry.group.docs]
 optional = true
 [tool.poetry.group.docs.dependencies]
-Sphinx = "^7.2.6"
+Sphinx = "^8.2.3"
 
 [tool.poetry.scripts]
 inbound-tasks-api = "lineage.queue.inbound_tasks_api:api"
