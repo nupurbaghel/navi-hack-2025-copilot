@@ -41,8 +41,8 @@ class ElevenLabsTTS:
             )
 
         # Default voice ID (Rachel - clear, professional voice good for aviation)
-        self.voice_id = voice_id or "21m00Tcm4TlvDq8ikWAM"
-
+        self.voice_id = voice_id or "IKne3meq5aSn9XLyUdCD"
+        
         # API endpoints
         self.base_url = "https://api.elevenlabs.io/v1"
         self.tts_url = f"{self.base_url}/text-to-speech/{self.voice_id}"
