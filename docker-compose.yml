@@ -15,6 +15,7 @@ services:
       - ./sr20.md:/app/sr20.md:ro
       - ./checklist_before_takeoff.json:/app/checklist_before_takeoff.json:ro
       - ./flight_data.csv:/app/flight_data.csv:ro
+      - ./flight-data:/app/flight-data:ro
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]

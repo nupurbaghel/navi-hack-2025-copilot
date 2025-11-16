@@ -40,6 +40,7 @@ class ChecklistSimulator:
         demo: bool = False,
         continue_on_error: bool = False,
         enable_tts: bool = False,
+        telemetry_file: Optional[str] = None,
     ):
         """Initialize the simulator.
 
@@ -49,12 +50,14 @@ class ChecklistSimulator:
             demo: If True, show checklist items at each step with delays
             continue_on_error: If True, continue processing steps even if one fails
             enable_tts: If True, enable text-to-speech announcements
+            telemetry_file: Optional path to telemetry CSV file to load
         """
         self.base_url = base_url.rstrip("/")
         self.debug = debug
         self.demo = demo
         self.continue_on_error = continue_on_error
         self.enable_tts = enable_tts
+        self.telemetry_file = telemetry_file
         self.checklist_id: Optional[str] = None
         self.steps: list = []
         self.failed_steps: list = []
@@ -170,7 +173,7 @@ class ChecklistSimulator:
                 except Exception as e:
                     logger.warning(f"TTS failed for announcement: {e}")
 
-            time.sleep(1)  # Simulate processing time
+            time.sleep(0.2)  # Simulate processing time
 
         # Call /checklist/next to start processing
         next_result = self._make_request(
@@ -280,8 +283,42 @@ class ChecklistSimulator:
         console.print(table)
         console.print()  # Empty line
 
+    def load_telemetry(self, csv_path: str) -> bool:
+        """Load a telemetry CSV file into the API.
+
+        Args:
+            csv_path: Path to the CSV file
+
+        Returns:
+            True if successful, False otherwise
+        """
+        console.print(f"[dim]Loading telemetry from: {csv_path}[/dim]")
+
+        result = self._make_request(
+            "POST",
+            "/telemetry/load",
+            json={"csv_path": csv_path},
+        )
+
+        if not result:
+            console.print(f"[red]Failed to load telemetry from {csv_path}[/red]")
+            return False
+
+        if result.get("success"):
+            rows = result.get("rows_loaded", 0)
+            console.print(f"[green]✓ Telemetry loaded: {rows} rows from {result.get('csv_path', csv_path)}[/green]\n")
+            return True
+        else:
+            console.print(f"[red]Failed to load telemetry: {result.get('message', 'Unknown error')}[/red]")
+            return False
+
     def run(self):
         """Run the complete checklist workflow."""
+        # Load telemetry file if specified
+        if self.telemetry_file:
+            if not self.load_telemetry(self.telemetry_file):
+                console.print("[yellow]Warning: Failed to load telemetry file, continuing with default[/yellow]\n")
+
         # Start checklist
         if not self.start_checklist():
             console.print("[red]Failed to start checklist[/red]")
@@ -397,6 +434,12 @@ Examples:
   # Enable text-to-speech (co-pilot announcements)
   python scripts/run_checklist.py --demo --tts
 
+  # Load different telemetry file
+  python scripts/run_checklist.py --demo --telemetry flight-data/log_240505_132633_KHAF.csv
+
+  # Combine options
+  python scripts/run_checklist.py --demo --tts --telemetry flight-data/log_240505_132633_KHAF.csv
+
   # Use different API URL
   python scripts/run_checklist.py --url http://localhost:8080
         """,
@@ -426,6 +469,11 @@ Examples:
         action="store_true",
         help="Enable text-to-speech announcements (requires ELEVENLABS_API_KEY)",
     )
+    parser.add_argument(
+        "--telemetry",
+        type=str,
+        help="Path to telemetry CSV file to load (e.g., flight-data/log_240505_132633_KHAF.csv)",
+    )
 
     args = parser.parse_args()
 
@@ -435,6 +483,7 @@ Examples:
         demo=args.demo,
         continue_on_error=args.continue_on_error,
         enable_tts=args.tts,
+        telemetry_file=args.telemetry,
     )
 
     try:

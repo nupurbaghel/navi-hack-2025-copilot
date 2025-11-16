@@ -102,6 +102,14 @@ class TelemetryValidator:
             logger.error(f"Error loading CSV: {e}")
             self._data = []
 
+    def get_row_count(self) -> int:
+        """Get the number of rows loaded.
+
+        Returns:
+            Number of rows in the dataset
+        """
+        return len(self._data) if self._data else 0
+
     def get_latest_row(self) -> Optional[Dict]:
         """Get the latest (most recent) row of telemetry data.
 

@@ -61,14 +61,43 @@ class ChecklistCompleteResponse(BaseModel):
     total_steps: int
 
 
-def get_telemetry_validator() -> Optional[TelemetryValidator]:
+class TelemetryLoadRequest(BaseModel):
+    """Request for /telemetry/load endpoint."""
+
+    csv_path: str
+
+
+class TelemetryLoadResponse(BaseModel):
+    """Response for /telemetry/load endpoint."""
+
+    success: bool
+    message: str
+    csv_path: str
+    rows_loaded: Optional[int] = None
+
+
+def get_telemetry_validator(csv_path: Optional[str] = None) -> Optional[TelemetryValidator]:
     """Get or create telemetry validator instance.
+
+    Args:
+        csv_path: Optional path to CSV file. If None, uses default or environment variable.
 
     Returns:
         TelemetryValidator instance, or None if CSV file not found
     """
     global telemetry_validator  # noqa: PLW0603
 
+    # If csv_path is provided, reload the validator
+    if csv_path:
+        csv_file = Path(csv_path)
+        if not csv_file.exists():
+            logger.warning(f"Flight data CSV not found at {csv_file}")
+            return None
+        logger.info(f"Loading telemetry data from: {csv_file}")
+        telemetry_validator = TelemetryValidator(str(csv_file))
+        return telemetry_validator
+
+    # Use existing validator if available
     if telemetry_validator is not None:
         return telemetry_validator
 
@@ -327,3 +356,49 @@ def create_checklist_endpoints(app: FastAPI):
             completed_steps=len(steps),
             total_steps=len(steps),
         )
+
+    @app.post("/telemetry/load", response_model=TelemetryLoadResponse)
+    def load_telemetry(request: TelemetryLoadRequest):
+        """Load a new telemetry CSV file.
+
+        Args:
+            request: Request containing path to CSV file
+
+        Returns:
+            Response with load status
+        """
+        global telemetry_validator  # noqa: PLW0603
+
+        csv_path = request.csv_path
+        csv_file = Path(csv_path)
+
+        # Check if file exists (try relative to project root if not absolute)
+        if not csv_file.is_absolute():
+            # Try relative to project root
+            project_root = Path(__file__).parent.parent
+            csv_file = project_root / csv_path
+
+        if not csv_file.exists():
+            raise HTTPException(status_code=404, detail=f"CSV file not found at {csv_path}")
+
+        try:
+            # Load new validator
+            validator = get_telemetry_validator(str(csv_file))
+            if validator:
+                rows_loaded = validator.get_row_count()
+                logger.info(f"Loaded telemetry from {csv_file}: {rows_loaded} rows")
+                return TelemetryLoadResponse(
+                    success=True,
+                    message=f"Telemetry data loaded successfully from {csv_file.name}",
+                    csv_path=str(csv_file),
+                    rows_loaded=rows_loaded,
+                )
+            else:
+                return TelemetryLoadResponse(
+                    success=False,
+                    message=f"Failed to load telemetry from {csv_file}",
+                    csv_path=str(csv_file),
+                )
+        except Exception as e:
+            logger.error(f"Error loading telemetry: {e}")
+            raise HTTPException(status_code=500, detail=f"Error loading telemetry file: {str(e)}")
