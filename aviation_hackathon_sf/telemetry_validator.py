@@ -51,7 +51,11 @@ class TelemetryValidator:
                 for row in reader:
                     if any(row.values()):  # Filter empty rows
                         # Normalize column names by stripping whitespace
-                        normalized_row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
+                        # Handle None values properly - convert to empty string before stripping
+                        normalized_row = {
+                            k.strip(): (v.strip() if isinstance(v, str) else ("" if v is None else str(v)))
+                            for k, v in row.items()
+                        }
                         all_rows.append(normalized_row)
 
                 # Filter to pre-flight data: engine running but still on ground
@@ -59,10 +63,17 @@ class TelemetryValidator:
                 # This matches the concept from FlightDataFilter but inverted - we want pre-flight WITH engine running
                 self._data = []
                 for row in all_rows:
-                    alt_ind_str = row.get("AltInd", "").strip()
-                    rpm_str = row.get("E1 RPM", "").strip()
-                    fflow_str = row.get("E1 FFlow", "").strip()
-                    gndspd_str = row.get("GndSpd", "").strip()
+                    # Get values and handle None/empty strings safely
+                    alt_ind_val = row.get("AltInd", "")
+                    rpm_val = row.get("E1 RPM", "")
+                    fflow_val = row.get("E1 FFlow", "")
+                    gndspd_val = row.get("GndSpd", "")
+
+                    # Convert to string and strip, handling None values
+                    alt_ind_str = (str(alt_ind_val) if alt_ind_val is not None else "").strip()
+                    rpm_str = (str(rpm_val) if rpm_val is not None else "").strip()
+                    fflow_str = (str(fflow_val) if fflow_val is not None else "").strip()
+                    gndspd_str = (str(gndspd_val) if gndspd_val is not None else "").strip()
 
                     try:
                         # Parse altitude - on ground means low altitude (< 50 feet) or empty/0
