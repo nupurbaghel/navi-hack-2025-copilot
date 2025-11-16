@@ -33,6 +33,8 @@ langchain = "^1.0.7"
 langchain-core = "^1.0.5"
 langchain-openai = "^1.0.3"
 openai = "^2.8.0"
+requests = "^2.32.0"
+rich = "^13.7.0"
 
 
 [tool.poetry.group.dev.dependencies]

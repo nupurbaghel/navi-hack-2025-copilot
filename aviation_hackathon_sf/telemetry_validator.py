@@ -46,7 +46,13 @@ class TelemetryValidator:
                     return
 
                 reader = csv.DictReader(lines)
-                self._data = [row for row in reader if any(row.values())]  # Filter empty rows
+                # Strip whitespace from column names and values
+                self._data = []
+                for row in reader:
+                    if any(row.values()):  # Filter empty rows
+                        # Normalize column names by stripping whitespace
+                        normalized_row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
+                        self._data.append(normalized_row)
                 logger.info(f"Loaded {len(self._data)} rows from CSV file")
         except Exception as e:
             logger.error(f"Error loading CSV: {e}")
@@ -68,7 +74,7 @@ class TelemetryValidator:
         """Get a numeric value from a specific column.
 
         Args:
-            column_name: Name of the CSV column
+            column_name: Name of the CSV column (will be stripped of whitespace)
             row: Specific row to read from. If None, uses latest row.
 
         Returns:
@@ -80,9 +86,22 @@ class TelemetryValidator:
         if not row:
             return None
 
-        value_str = row.get(column_name, "").strip()
-        if not value_str:
+        # Strip whitespace from column name for lookup (rows are already normalized)
+        column_name = column_name.strip()
+        value_str = row.get(column_name)
+
+        if value_str is None:
             return None
+
+        # Strip whitespace from value if it's a string
+        if isinstance(value_str, str):
+            value_str = value_str.strip()
+            if not value_str:
+                return None
+        else:
+            value_str = str(value_str).strip()
+            if not value_str:
+                return None
 
         try:
             return float(value_str)

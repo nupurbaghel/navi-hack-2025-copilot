@@ -61,6 +61,15 @@ test_ci: check_poetry
 run:
 	poetry run uvicorn aviation_hackathon_sf.main:app --reload --port 8000
 
+run-checklist:
+	poetry run python scripts/run_checklist.py
+
+run-checklist-debug:
+	poetry run python scripts/run_checklist.py --debug
+
+run-checklist-demo:
+	poetry run python scripts/run_checklist.py --demo
+
 sh:
 	poetry shell
 
