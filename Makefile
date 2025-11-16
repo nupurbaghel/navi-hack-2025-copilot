@@ -73,6 +73,9 @@ run-checklist-demo:
 run-checklist-continue:
 	poetry run python scripts/run_checklist.py --continue-on-error
 
+run-checklist-tts:
+	poetry run python scripts/run_checklist.py --demo --tts
+
 sh:
 	poetry shell
 

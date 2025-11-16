@@ -35,6 +35,8 @@ langchain-openai = "^1.0.3"
 openai = "^2.8.0"
 requests = "^2.32.0"
 rich = "^13.7.0"
+pygame = "^2.6.0"
+elevenlabs = "^1.0.0"
 
 
 [tool.poetry.group.dev.dependencies]

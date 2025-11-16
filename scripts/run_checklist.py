@@ -6,15 +6,26 @@ Demonstrates how the frontend would interact with the backend API.
 
 import argparse
 import json
+import os
 import sys
 import time
 from typing import Dict, Optional
 
 import requests
+from loguru import logger
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+
+# Try to import TTS, but make it optional
+try:
+    from aviation_hackathon_sf.text_to_speech import ElevenLabsTTS
+
+    TTS_AVAILABLE = True
+except ImportError:
+    TTS_AVAILABLE = False
+    ElevenLabsTTS = None
 
 console = Console()
 
@@ -28,6 +39,7 @@ class ChecklistSimulator:
         debug: bool = False,
         demo: bool = False,
         continue_on_error: bool = False,
+        enable_tts: bool = False,
     ):
         """Initialize the simulator.
 
@@ -36,14 +48,31 @@ class ChecklistSimulator:
             debug: If True, show raw API responses
             demo: If True, show checklist items at each step with delays
             continue_on_error: If True, continue processing steps even if one fails
+            enable_tts: If True, enable text-to-speech announcements
         """
         self.base_url = base_url.rstrip("/")
         self.debug = debug
         self.demo = demo
         self.continue_on_error = continue_on_error
+        self.enable_tts = enable_tts
         self.checklist_id: Optional[str] = None
         self.steps: list = []
         self.failed_steps: list = []
+
+        # Initialize TTS if enabled
+        self.tts: Optional[ElevenLabsTTS] = None
+        if self.enable_tts:
+            if not TTS_AVAILABLE:
+                console.print("[yellow]Warning: TTS not available. Install dependencies: poetry install[/yellow]")
+            elif not os.getenv("ELEVENLABS_API_KEY"):
+                console.print("[yellow]Warning: ELEVENLABS_API_KEY not set. TTS disabled.[/yellow]")
+            else:
+                try:
+                    self.tts = ElevenLabsTTS()
+                    console.print("[green]✓ Text-to-Speech enabled[/green]")
+                except Exception as e:
+                    console.print(f"[yellow]Warning: Could not initialize TTS: {e}[/yellow]")
+                    self.tts = None
 
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Optional[Dict]:
         """Make an API request and return the JSON response.
@@ -130,6 +159,17 @@ class ChecklistSimulator:
             if step_desc:
                 console.print(f"[dim]{step_desc}[/dim]")
             console.print("[yellow]Processing...[/yellow]")
+
+            # Announce the item being checked if TTS is enabled
+            if self.enable_tts and self.tts:
+                try:
+                    announcement = f"{step_name}, checking."
+                    audio_data = self.tts.text_to_speech(announcement)
+                    # Play in background (non-blocking)
+                    self.tts.play_audio(audio_data)
+                except Exception as e:
+                    logger.warning(f"TTS failed for announcement: {e}")
+
             time.sleep(1)  # Simulate processing time
 
         # Call /checklist/next to start processing
@@ -161,6 +201,37 @@ class ChecklistSimulator:
 
         return status_result
 
+    def _speak_checklist_item(self, step_name: str, status: str):
+        """Speak checklist item using TTS if enabled.
+
+        Args:
+            step_name: Name of the checklist item
+            status: Status of the item
+        """
+        if not self.tts:
+            return
+
+        try:
+            # Map status to TTS announcement format
+            if status == "success":
+                text = f"{step_name}, check."
+            elif status == "caution":
+                text = f"Caution: {step_name} requires attention."
+            elif status == "warning":
+                text = f"Warning: {step_name} check failed."
+            elif status == "failed":
+                text = f"Alert: {step_name} check failed."
+            else:
+                text = f"{step_name}, checking."
+
+            # Generate and play audio
+            audio_data = self.tts.text_to_speech(text)
+            self.tts.play_audio(audio_data)
+
+        except Exception as e:
+            # Don't fail the script if TTS fails
+            logger.warning(f"TTS failed for {step_name}: {e}")
+
     def display_status(self, step_id: str, status_data: Dict):
         """Display the status of a checklist step.
 
@@ -175,6 +246,10 @@ class ChecklistSimulator:
         message = status_data.get("message", "")
         error = status_data.get("error")
         next_step_id = status_data.get("next_step_id")
+
+        # Speak the checklist item if TTS is enabled
+        if self.enable_tts:
+            self._speak_checklist_item(step_name, status)
 
         # Determine status color and icon
         status_config = {
@@ -319,6 +394,9 @@ Examples:
   # Combine all options
   python scripts/run_checklist.py --debug --demo --continue-on-error
 
+  # Enable text-to-speech (co-pilot announcements)
+  python scripts/run_checklist.py --demo --tts
+
   # Use different API URL
   python scripts/run_checklist.py --url http://localhost:8080
         """,
@@ -343,6 +421,11 @@ Examples:
         action="store_true",
         help="Continue processing steps even if one fails (useful for testing/demos)",
     )
+    parser.add_argument(
+        "--tts",
+        action="store_true",
+        help="Enable text-to-speech announcements (requires ELEVENLABS_API_KEY)",
+    )
 
     args = parser.parse_args()
 
@@ -351,6 +434,7 @@ Examples:
         debug=args.debug,
         demo=args.demo,
         continue_on_error=args.continue_on_error,
+        enable_tts=args.tts,
     )
 
     try:
