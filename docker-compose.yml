@@ -5,9 +5,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.basic
-    # command: uvicorn aviation_hackathon_sf.performer:api --port 8000 --host 0.0.0.0
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     ports:
       - "8000:8000"
+    volumes:
+      - ./sr20.md:/app/sr20.md:ro
+      - ./checklist_before_takeoff.json:/app/checklist_before_takeoff.json
     depends_on:
       - redis
 

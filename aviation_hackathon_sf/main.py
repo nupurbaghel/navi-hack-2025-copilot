@@ -4,8 +4,12 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from aviation_hackathon_sf import performer
+from aviation_hackathon_sf.checklist_api import create_checklist_endpoints
 
-app = FastAPI()
+app = FastAPI(title="Aviation Hackathon SF - Co-Pilot Assistant API")
+
+# Register checklist endpoints
+create_checklist_endpoints(app)
 
 
 class Item(BaseModel):
@@ -16,7 +20,11 @@ class Item(BaseModel):
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World", "something": performer.perform_something()}
+    return {
+        "Hello": "World",
+        "something": performer.perform_something(),
+        "api": "Aviation Hackathon SF - Co-Pilot Assistant",
+    }
 
 
 @app.get("/ping")
