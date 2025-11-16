@@ -1,11 +1,11 @@
 version: '3'
 
 services:
-  python-chassis:
+  aviation-hackathon-sf:
     build:
       context: .
       dockerfile: Dockerfile
-    # command: uvicorn chassis_app.performer:api --port 8000 --host 0.0.0.0
+    # command: uvicorn aviation_hackathon_sf.performer:api --port 8000 --host 0.0.0.0
     ports:
       - "8000:8000"
     depends_on:

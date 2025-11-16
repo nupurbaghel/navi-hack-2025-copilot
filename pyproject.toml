@@ -11,9 +11,9 @@ disable = "C0330, C0326"
 profile = 'black'
 
 [tool.poetry]
-name = "python-chassis"
+name = "aviation-hackathon-sf"
 version = "0.0.1"
-description = "Python Template code base"
+description = "aviation-hackathon-sf code base"
 authors = ["Shubham Chaudhary <shubham@chaudhary.xyz>"]
 readme = "README.md"
 

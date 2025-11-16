@@ -3,7 +3,7 @@ from typing import Union
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from chassis_app import performer
+from aviation_hackathon_sf import performer
 
 app = FastAPI()
 

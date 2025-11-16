@@ -1,4 +1,4 @@
-Python Template
+aviation-hackathon-sf
 ===============
 
 This repository is a template for Python projects and acts as a starting point for new projects.
@@ -19,7 +19,7 @@ To create a new project using this template, run the following command:
 
 ```bash
 export APP_NAME=my-new-app
-git clone --recursive https://github.com/ylogx/python-chassis.git ${APP_NAME} && cd ${APP_NAME} && bin/new-project
+git clone --recursive https://github.com/ylogx/aviation-hackathon-sf.git ${APP_NAME} && cd ${APP_NAME} && bin/new-project
 ```
 
 This will clone the repository and setup code for your new specified App Name.

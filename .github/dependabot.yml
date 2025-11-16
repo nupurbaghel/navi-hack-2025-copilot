@@ -6,6 +6,6 @@
 version: 2
 updates:
   - package-ecosystem: "pip" # See documentation for possible values
-    directory: "/chassis_app" # Location of package manifests
+    directory: "/aviation_hackathon_sf" # Location of package manifests
     schedule:
       interval: "daily"

@@ -21,4 +21,4 @@ WORKDIR /app
 
 COPY . .
 
-CMD poetry run uvicorn chassis_app.main:app --reload
+CMD poetry run uvicorn aviation_hackathon_sf.main:app --reload

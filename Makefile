@@ -61,7 +61,7 @@ test_ci: check_poetry
 run:
 	#poetry run python run.py --help
 	poetry run python run.py perform
-	poetry run uvicorn chassis_app.main:app --reload
+	poetry run uvicorn aviation_hackathon_sf.main:app --reload
 
 sh:
 	poetry shell
@@ -79,11 +79,11 @@ down:
 
 # Docker
 build:
-	docker build --pull -f Dockerfile -t python-chassis .
+	docker build --pull -f Dockerfile -t aviation-hackathon-sf .
 
 drun: build
-	@#docker run -v $$(pwd):/app --rm -it python-chassis bash -c "poetry run python run.py perform"
-	docker run -v $$(pwd):/home/appuser --rm -it python-chassis bash -c "python run.py perform"
+	@#docker run -v $$(pwd):/app --rm -it aviation-hackathon-sf bash -c "poetry run python run.py perform"
+	docker run -v $$(pwd):/home/appuser --rm -it aviation-hackathon-sf bash -c "python run.py perform"
 
 dsh: build
-	docker run -v $$(pwd):/home/appuser --rm -it python-chassis poetry shell
+	docker run -v $$(pwd):/home/appuser --rm -it aviation-hackathon-sf poetry shell

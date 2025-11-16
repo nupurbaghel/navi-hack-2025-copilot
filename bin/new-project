@@ -13,20 +13,20 @@ if [ -z ${APP_NAME+x} ]; then # Fail if APP_NAME is not set
   exit 1
 fi
 
-# git clone --recursive git@github.com:ylogx/python-chassis.git ${APP_NAME}
+# git clone --recursive git@github.com:ylogx/aviation-hackathon-sf.git ${APP_NAME}
 
-printf "${YELLOW}Renaming python-chassis to ${APP_NAME}...${NC}\n"
+printf "${YELLOW}Renaming aviation-hackathon-sf to ${APP_NAME}...${NC}\n"
 # Deployment name
-grep -lR --exclude-dir=".git" "python-chassis" . | xargs sed -i "s/python-chassis/${APP_NAME}/g"
+grep -lR --exclude-dir=".git" "aviation-hackathon-sf" . | xargs sed -i "s/aviation-hackathon-sf/${APP_NAME}/g"
 # Documentation name
-grep -lR --exclude-dir=".git" "Python Template" . | xargs sed -i "s/Python Template/${APP_NAME}/g"
+grep -lR --exclude-dir=".git" "aviation-hackathon-sf" . | xargs sed -i "s/aviation-hackathon-sf/${APP_NAME}/g"
 # Package name
-mv chassis_app ${APP_NAME//[-]/_}
-grep -lR --exclude-dir=".git" "chassis_app" . | xargs sed -i "s/chassis_app/${APP_NAME//[-]/_}/g"
+mv aviation_hackathon_sf ${APP_NAME//[-]/_}
+grep -lR --exclude-dir=".git" "aviation_hackathon_sf" . | xargs sed -i "s/aviation_hackathon_sf/${APP_NAME//[-]/_}/g"
 printf "${GREEN}Updated chassis names to ${APP_NAME}.${NC}\n"
 
-# Only do this if the git remote url contains ylogx/python-chassis
-if git remote -v | grep -q "ylogx/python-chassis"; then
+# Only do this if the git remote url contains ylogx/aviation-hackathon-sf
+if git remote -v | grep -q "ylogx/aviation-hackathon-sf"; then
   printf "${YELLOW}Initializing new git repository...${NC}\n"
 
   LATEST_COMMIT=$(git log --pretty=format:'%h' -n 1)
@@ -35,9 +35,9 @@ if git remote -v | grep -q "ylogx/python-chassis"; then
   git add .
   git commit -m "Initial commit for ${APP_NAME}
 
-Cloned from python-chassis: https://github.com/ylogx/python-chassis on $(date).
+Cloned from aviation-hackathon-sf: https://github.com/ylogx/aviation-hackathon-sf on $(date).
 Latest commit: ${LATEST_COMMIT}
-https://github.com/ylogx/python-chassis/tree/${LATEST_COMMIT}"
+https://github.com/ylogx/aviation-hackathon-sf/tree/${LATEST_COMMIT}"
     printf "${GREEN}Initialized new git repository.${NC}\n"
 else
   printf "${YELLOW}Skipping git initialization!${NC}\n"

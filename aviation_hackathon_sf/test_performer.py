@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from chassis_app import performer
+from aviation_hackathon_sf import performer
 
 
 class PerformerTest(TestCase):
