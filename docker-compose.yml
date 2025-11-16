@@ -12,6 +12,7 @@ services:
     volumes:
       - ./sr20.md:/app/sr20.md:ro
       - ./checklist_before_takeoff.json:/app/checklist_before_takeoff.json
+      - ./flight_data.csv:/app/flight_data.csv:ro
     depends_on:
       - redis
 

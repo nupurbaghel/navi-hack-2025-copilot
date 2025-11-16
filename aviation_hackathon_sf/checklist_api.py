@@ -3,6 +3,7 @@ FastAPI endpoints for checklist workflow.
 """
 
 import json
+import os
 import uuid
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -11,10 +12,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from loguru import logger
+from aviation_hackathon_sf.telemetry_validator import TelemetryValidator
 
 # In-memory storage for checklist state (in production, use Redis or database)
 checklist_state: Dict[str, Dict] = {}
 checklist_data: Optional[List[Dict]] = None
+telemetry_validator: Optional[TelemetryValidator] = None
 
 
 class ChecklistStartResponse(BaseModel):
@@ -56,6 +59,31 @@ class ChecklistCompleteResponse(BaseModel):
     message: str
     completed_steps: int
     total_steps: int
+
+
+def get_telemetry_validator() -> Optional[TelemetryValidator]:
+    """Get or create telemetry validator instance.
+
+    Returns:
+        TelemetryValidator instance, or None if CSV file not found
+    """
+    global telemetry_validator  # noqa: PLW0603
+
+    if telemetry_validator is not None:
+        return telemetry_validator
+
+    # Try to find CSV file
+    csv_path = os.getenv("FLIGHT_DATA_CSV")
+    if not csv_path:
+        # Try default location
+        csv_path = Path(__file__).parent.parent / "flight_data.csv"
+
+    if not Path(csv_path).exists():
+        logger.warning(f"Flight data CSV not found at {csv_path}")
+        return None
+
+    telemetry_validator = TelemetryValidator(str(csv_path))
+    return telemetry_validator
 
 
 def load_checklist_data(checklist_file: Optional[str] = None) -> List[Dict]:
@@ -164,9 +192,7 @@ def create_checklist_endpoints(app: FastAPI):
         """
         # Validate checklist_id if provided
         if checklist_id and checklist_id not in checklist_state:
-            raise HTTPException(
-                status_code=404, detail=f"Checklist {checklist_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Checklist {checklist_id} not found")
 
         steps = load_checklist_data()
         step = next((s for s in steps if s["step_id"] == step_id), None)
@@ -197,9 +223,7 @@ def create_checklist_endpoints(app: FastAPI):
         """
         # Validate checklist_id if provided
         if checklist_id and checklist_id not in checklist_state:
-            raise HTTPException(
-                status_code=404, detail=f"Checklist {checklist_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Checklist {checklist_id} not found")
 
         steps = load_checklist_data()
         step = next((s for s in steps if s["step_id"] == step_id), None)
@@ -208,27 +232,71 @@ def create_checklist_endpoints(app: FastAPI):
             raise HTTPException(status_code=404, detail=f"Step {step_id} not found")
 
         # Find current step index
-        current_index = next(
-            (i for i, s in enumerate(steps) if s["step_id"] == step_id), None
-        )
+        current_index = next((i for i, s in enumerate(steps) if s["step_id"] == step_id), None)
 
         if current_index is None:
             raise HTTPException(status_code=404, detail=f"Step {step_id} not found in checklist")
 
-        # For now, return success status (dummy implementation)
-        # In production, this would check actual validation results from telemetry data
-        next_step_id = None
-        if current_index < len(steps) - 1:
-            next_step_id = steps[current_index + 1]["step_id"]
+        # Validate against telemetry data
+        validator = get_telemetry_validator()
+        if validator:
+            status, message, details = validator.validate_step(step)
+            logger.info(f"Status check for step {step_id} (checklist {checklist_id}): {status} - {message}")
 
-        logger.info(f"Status check for step {step_id} (checklist {checklist_id}): success")
+            # Determine if we can proceed to next step
+            # Only proceed if status is "success" or "caution" (warnings block progression)
+            next_step_id = None
+            if status in ("success", "caution"):
+                if current_index < len(steps) - 1:
+                    next_step_id = steps[current_index + 1]["step_id"]
+            elif status == "warning":
+                # Warning blocks progression - pilot must address
+                return ChecklistStatusResponse(
+                    step_id=step_id,
+                    status="warning",
+                    next_step_id=None,
+                    error=message,
+                    message=f"WARNING: {step['name']} - {message}",
+                )
+            elif status == "no_data":
+                # No data available - might be OK for some steps
+                if current_index < len(steps) - 1:
+                    next_step_id = steps[current_index + 1]["step_id"]
+                return ChecklistStatusResponse(
+                    step_id=step_id,
+                    status="no_data",
+                    next_step_id=next_step_id,
+                    message=message,
+                )
+            else:
+                # Failed validation
+                return ChecklistStatusResponse(
+                    step_id=step_id,
+                    status="failed",
+                    next_step_id=None,
+                    error=message,
+                    message=f"FAILED: {step['name']} - {message}",
+                )
 
-        return ChecklistStatusResponse(
-            step_id=step_id,
-            status="success",
-            next_step_id=next_step_id,
-            message=f"Step {step['name']} validated successfully",
-        )
+            return ChecklistStatusResponse(
+                step_id=step_id,
+                status=status,
+                next_step_id=next_step_id,
+                message=message,
+            )
+        else:
+            # No validator available - return dummy success
+            logger.warning("No telemetry validator available, returning dummy status")
+            next_step_id = None
+            if current_index < len(steps) - 1:
+                next_step_id = steps[current_index + 1]["step_id"]
+
+            return ChecklistStatusResponse(
+                step_id=step_id,
+                status="success",
+                next_step_id=next_step_id,
+                message=f"Step {step['name']} - No telemetry data available (using dummy validation)",
+            )
 
     @app.post("/checklist/complete", response_model=ChecklistCompleteResponse)
     def complete_checklist(request: ChecklistCompleteRequest):
@@ -243,9 +311,7 @@ def create_checklist_endpoints(app: FastAPI):
         checklist_id = request.checklist_id
 
         if checklist_id not in checklist_state:
-            raise HTTPException(
-                status_code=404, detail=f"Checklist {checklist_id} not found"
-            )
+            raise HTTPException(status_code=404, detail=f"Checklist {checklist_id} not found")
 
         state = checklist_state[checklist_id]
         steps = state["steps"]
