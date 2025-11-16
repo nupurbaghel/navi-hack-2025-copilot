@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autopilot Preflight Checklist</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #f5f5f7;
+            color: #1d1d1f;
+            padding: 2rem 1rem;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            position: relative;
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .emergency-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            background: #ff3b30;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.938rem;
+            cursor: pointer;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .emergency-btn:hover {
+            background: #e6342a;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #6e6e73;
+            font-size: 1rem;
+        }
+
+        .checklist {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1.25rem 1.5rem;
+            border-bottom: 1px solid #e5e5e7;
+            transition: background 0.2s;
+        }
+
+        .checklist-item:last-child {
+            border-bottom: none;
+        }
+
+        .checklist-item:hover {
+            background: #fafafa;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 4px;
+        }
+
+        .status-green {
+            background: #34c759;
+            box-shadow: 0 0 8px rgba(52, 199, 89, 0.3);
+        }
+
+        .status-yellow {
+            background: #ffcc00;
+            box-shadow: 0 0 8px rgba(255, 204, 0, 0.3);
+        }
+
+        .status-red {
+            background: #ff3b30;
+            box-shadow: 0 0 8px rgba(255, 59, 48, 0.3);
+        }
+
+        .item-title {
+            font-weight: 500;
+            font-size: 0.938rem;
+            min-width: 200px;
+            flex-shrink: 0;
+        }
+
+        .item-description {
+            color: #6e6e73;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            flex: 1;
+        }
+
+        .summary {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-count {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .summary-label {
+            font-size: 0.875rem;
+            color: #6e6e73;
+        }
+
+        @media (max-width: 768px) {
+            .checklist-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .item-title {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="container">
+        <header>
+            <a href="/emergency" class="emergency-btn">EMERGENCY</a>
+            <h1>Autopilot Preflight Checklist</h1>
+            <p class="subtitle">System Verification Status</p>
+        </header>
+
+        <div class="checklist">
+            <div v-if="loading" style="padding: 2rem; text-align: center; color: #6e6e73;">
+                Loading checklist...
+            </div>
+            <div v-else-if="error" style="padding: 2rem; text-align: center; color: #ff3b30;">
+                Error loading checklist: {{ error }}
+            </div>
+            <div v-else>
+                <div v-for="item in checklistItems" :key="item.id" class="checklist-item">
+                    <div class="status-indicator" :class="`status-${item.status}`"></div>
+                    <div class="item-title">{{ item.name }}</div>
+                    <div class="item-description">{{ item.description }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary">
+            <div class="summary-item">
+                <div class="summary-count" style="color: #34c759;">{{ greenCount }}</div>
+                <div class="summary-label">Operational</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-count" style="color: #ffcc00;">{{ yellowCount }}</div>
+                <div class="summary-label">Caution</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-count" style="color: #ff3b30;">{{ redCount }}</div>
+                <div class="summary-label">Attention Required</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    checklistItems: [],
+                    loading: true,
+                    error: null,
+                    apiUrl: 'http://localhost:8000/checklist' // Update with your API URL
+                };
+            },
+            computed: {
+                greenCount() {
+                    return this.checklistItems.filter(item => item.status === 'green').length;
+                },
+                yellowCount() {
+                    return this.checklistItems.filter(item => item.status === 'yellow').length;
+                },
+                redCount() {
+                    return this.checklistItems.filter(item => item.status === 'red').length;
+                }
+            },
+            methods: {
+                async fetchChecklist() {
+                    try {
+                        this.loading = true;
+                        this.error = null;
+                        const response = await fetch(this.apiUrl);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        this.checklistItems = await response.json();
+                    } catch (err) {
+                        this.error = err.message;
+                        console.error('Error fetching checklist:', err);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                async refreshChecklist() {
+                    await this.fetchChecklist();
+                }
+            },
+            mounted() {
+                // Fetch data when component is mounted
+                this.fetchChecklist();
+                
+                // Optional: Auto-refresh every 30 seconds
+                // setInterval(() => {
+                //     this.fetchChecklist();
+                // }, 30000);
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
