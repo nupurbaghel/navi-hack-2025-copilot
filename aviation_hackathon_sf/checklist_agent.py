@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate
-from langchain.schema.output_parser import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 from loguru import logger
 
 
@@ -139,10 +139,17 @@ class ChecklistAgent:
 from the SR-20 Airplane Flight Manual and map each item to the relevant telemetry data columns
 that can be used to verify/validate that checklist item.
 
-For each checklist item, identify:
-1. The checklist item name/description
-2. The expected value or range (if applicable)
-3. Which CSV telemetry columns can be used to validate this item
+CRITICAL: The manual contains detailed instrument range tables with color-coded states:
+- RED Arc/Bar: Warning ranges (dangerous/unsafe conditions)
+- YELLOW Arc/Bar: Caution ranges (requires attention)
+- GREEN Arc/Bar: Normal/acceptable ranges
+
+For each checklist item, you MUST:
+1. Find the checklist item name/description from the "{checklist_type}" section
+2. Search the manual for related instrument range tables (look for sections like "SECTION 2: LIMITATIONS"
+   which contains tables with Red/Yellow/Green arcs for various instruments)
+3. Extract the exact numerical ranges for each state (Red, Yellow, Green) if available
+4. Map to CSV telemetry columns that can validate this item
 
 Focus on the "{checklist_type}" checklist section. Extract all items in that section.
 
@@ -156,6 +163,11 @@ Return the result as a JSON array where each item has:
 - "expected_value": expected value or range (if applicable, null otherwise)
 - "telemetry_columns": array of CSV column names that can validate this item
 - "validation_logic": brief description of how to validate using telemetry data
+- "states": object with color-coded ranges (if available):
+  - "green": object with "min" and "max" values for normal range
+  - "yellow": object with "min" and "max" values for caution range (can be null if not applicable)
+  - "red": object with "min" and "max" values for warning range (can be null if not applicable)
+  - "unit": unit of measurement (e.g., "gallons", "psi", "°F", "RPM", "volts")
 
 Example format:
 [
@@ -163,23 +175,63 @@ Example format:
     "step_id": "step_1",
     "name": "Fuel Quantity",
     "description": "Confirm fuel quantity is adequate for flight",
-    "expected_value": "> minimum required gallons",
+    "expected_value": "10-28 gallons (green range)",
     "telemetry_columns": ["FQtyL", "FQtyR"],
-    "validation_logic": "Sum of FQtyL and FQtyR should be above minimum required fuel"
+    "validation_logic": "Sum of FQtyL and FQtyR should be in green range (10-28 gallons)",
+    "states": {{
+      "green": {{"min": 10, "max": 28}},
+      "yellow": {{"min": 0, "max": 10}},
+      "red": null,
+      "unit": "gallons"
+    }}
+  }},
+  {{
+    "step_id": "step_2",
+    "name": "Oil Pressure",
+    "description": "Check engine oil pressure is within normal range",
+    "expected_value": "55-95 psi (green range)",
+    "telemetry_columns": ["E1 OilP"],
+    "validation_logic": "E1 OilP should be between 55-95 psi for normal operation",
+    "states": {{
+      "green": {{"min": 55, "max": 95}},
+      "yellow": {{"min": 25, "max": 55}},
+      "red": {{"min": 0, "max": 25}},
+      "unit": "psi"
+    }}
   }}
-]""",
+]
+
+IMPORTANT: Search the manual thoroughly for instrument range tables. Look for sections that list
+Red Arc, Yellow Arc, and Green Arc ranges. Extract the exact numerical values from these tables.""",
                 ),
-                ("user", "Extract the {checklist_type} checklist from this manual:\n\n{manual}"),
+                (
+                    "user",
+                    "Extract the {checklist_type} checklist from this manual. Pay special attention to instrument range tables with Red/Yellow/Green arcs:\n\n{manual}",
+                ),
             ]
         )
 
         chain = prompt | self.llm | self.output_parser
 
         logger.info(f"Extracting {checklist_type} checklist...")
+        # Include more content to capture LIMITATIONS section with instrument ranges
+        # Try to include both the checklist section and the LIMITATIONS section
+        manual_snippet = manual_content[:100000]  # Increased limit to include range tables
+
+        # If we can find the LIMITATIONS section, include it (contains instrument range tables)
+        limitations_start = manual_content.find("SECTION 2: LIMITATIONS")
+        if limitations_start != -1:
+            # Include LIMITATIONS section with instrument range tables (approximately 30000 chars)
+            # This should capture the Powerplant Limitations tables with Red/Yellow/Green arcs
+            limitations_section = manual_content[limitations_start : limitations_start + 30000]
+            # Also include the checklist section from the beginning
+            checklist_section = manual_content[:50000]
+            manual_snippet = f"{checklist_section}\n\n=== INSTRUMENT RANGE TABLES FROM SECTION 2: LIMITATIONS ===\n{limitations_section}"
+
         response = chain.invoke(
             {
                 "checklist_type": checklist_type,
-                "manual": manual_content[:50000],  # Limit to avoid token limits
+                "manual": manual_snippet,
                 "columns": ", ".join(self.CSV_COLUMNS),
             }
         )
@@ -248,6 +300,16 @@ def main():
     for item in checklist:
         print(f"  - {item['step_id']}: {item['name']}")
         print(f"    Columns: {', '.join(item.get('telemetry_columns', []))}")
+        if "states" in item and item["states"]:
+            states = item["states"]
+            if states.get("green"):
+                print(f"    Green: {states['green'].get('min')}-{states['green'].get('max')} {states.get('unit', '')}")
+            if states.get("yellow"):
+                print(
+                    f"    Yellow: {states['yellow'].get('min')}-{states['yellow'].get('max')} {states.get('unit', '')}"
+                )
+            if states.get("red"):
+                print(f"    Red: {states['red'].get('min')}-{states['red'].get('max')} {states.get('unit', '')}")
 
 
 if __name__ == "__main__":
