@@ -41,3 +41,18 @@ make run
 ```
 
 You can find more useful commands in the `Makefile`.
+
+## API Contract
+
+/checklist/start
+On button click, it triggers the new checklist checks.
+Returns list of steps, message to show. UI starts /start/next with each step.
+
+/checklist/next/<step_id>
+Returns the name of the step. Runs the step in background.
+
+/checklist/status/<step_id>
+Returns the status of the step. If success, it returns the ID of the next step. If failed, it shows the error and ???
+
+/checklist/complete
+Returns success finishing the checklist and final message to show.
