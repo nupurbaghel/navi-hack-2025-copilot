@@ -47,13 +47,36 @@ class TelemetryValidator:
 
                 reader = csv.DictReader(lines)
                 # Strip whitespace from column names and values
-                self._data = []
+                all_rows = []
                 for row in reader:
                     if any(row.values()):  # Filter empty rows
                         # Normalize column names by stripping whitespace
                         normalized_row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
-                        self._data.append(normalized_row)
-                logger.info(f"Loaded {len(self._data)} rows from CSV file")
+                        all_rows.append(normalized_row)
+
+                # Filter to pre-flight data only (AltInd == 0 or empty)
+                # This matches the FlightDataFilter.filter_preflight_only() logic
+                self._data = []
+                for row in all_rows:
+                    alt_ind_str = row.get("AltInd", "").strip()
+                    if not alt_ind_str:
+                        # Empty AltInd means pre-flight
+                        self._data.append(row)
+                    else:
+                        try:
+                            alt_ind = float(alt_ind_str)
+                            if alt_ind == 0:
+                                # AltInd == 0 means pre-flight (on ground)
+                                self._data.append(row)
+                        except (ValueError, TypeError):
+                            # If we can't parse, treat as pre-flight (conservative)
+                            self._data.append(row)
+
+                rows_filtered = len(all_rows) - len(self._data)
+                logger.info(
+                    f"Loaded {len(all_rows)} total rows, filtered to {len(self._data)} pre-flight rows "
+                    f"(removed {rows_filtered} in-flight/taxi rows)"
+                )
         except Exception as e:
             logger.error(f"Error loading CSV: {e}")
             self._data = []
@@ -108,9 +131,7 @@ class TelemetryValidator:
         except (ValueError, TypeError):
             return None
 
-    def validate_step(
-        self, step: Dict, row: Optional[Dict] = None
-    ) -> Tuple[str, str, Optional[Dict]]:
+    def validate_step(self, step: Dict, row: Optional[Dict] = None) -> Tuple[str, str, Optional[Dict]]:
         """Validate a checklist step against telemetry data.
 
         Args:
@@ -202,7 +223,9 @@ class TelemetryValidator:
             if yellow_min is not None and yellow_max is not None:
                 if yellow_min <= check_value <= yellow_max:
                     details["range"] = "yellow"
-                    details["range_description"] = f"In yellow range ({yellow_min}-{yellow_max} {states.get('unit', '')})"
+                    details["range_description"] = (
+                        f"In yellow range ({yellow_min}-{yellow_max} {states.get('unit', '')})"
+                    )
                     return ("caution", f"CAUTION: {value_description} - Requires attention", details)
             elif yellow_min is not None and check_value < yellow_min:
                 details["range"] = "yellow"
@@ -233,5 +256,72 @@ class TelemetryValidator:
                 return ("success", f"OK: {value_description} - Within normal range", details)
 
         # If we get here, value doesn't match any defined range
+        # Build a helpful error message explaining what went wrong
+        unit = states.get("unit", "")
+        range_descriptions = []
+
+        if green_range:
+            green_min = green_range.get("min")
+            green_max = green_range.get("max")
+            if green_min is not None and green_max is not None:
+                range_descriptions.append(f"Green (normal): {green_min}-{green_max} {unit}")
+            elif green_min is not None:
+                range_descriptions.append(f"Green (normal): ≥{green_min} {unit}")
+            elif green_max is not None:
+                range_descriptions.append(f"Green (normal): ≤{green_max} {unit}")
+
+        if yellow_range:
+            yellow_min = yellow_range.get("min")
+            yellow_max = yellow_range.get("max")
+            if yellow_min is not None and yellow_max is not None:
+                range_descriptions.append(f"Yellow (caution): {yellow_min}-{yellow_max} {unit}")
+            elif yellow_min is not None:
+                range_descriptions.append(f"Yellow (caution): <{yellow_min} {unit}")
+            elif yellow_max is not None:
+                range_descriptions.append(f"Yellow (caution): >{yellow_max} {unit}")
+
+        if red_range:
+            red_min = red_range.get("min")
+            red_max = red_range.get("max")
+            if red_min is not None and red_max is not None:
+                range_descriptions.append(f"Red (warning): {red_min}-{red_max} {unit}")
+            elif red_min is not None:
+                range_descriptions.append(f"Red (warning): <{red_min} {unit}")
+            elif red_max is not None:
+                range_descriptions.append(f"Red (warning): >{red_max} {unit}")
+
+        ranges_text = " | ".join(range_descriptions) if range_descriptions else "No ranges defined"
+
+        # Determine what went wrong
+        problem_description = f"Value {check_value:.2f} {unit} is outside all defined ranges."
+        if green_range and green_range.get("max") is not None:
+            green_max = green_range.get("max")
+            if check_value > green_max:
+                diff = check_value - green_max
+                problem_description = (
+                    f"Value {check_value:.2f} {unit} exceeds the maximum normal range of {green_max} {unit} "
+                    f"by {diff:.2f} {unit}. "
+                )
+                if diff < 1.0:  # Small difference, might be acceptable
+                    problem_description += "This is slightly above the normal range - verify fuel quantity manually."
+                else:
+                    problem_description += "This exceeds the safe operating range."
+        elif green_range and green_range.get("min") is not None:
+            green_min = green_range.get("min")
+            if check_value < green_min:
+                diff = green_min - check_value
+                problem_description = (
+                    f"Value {check_value:.2f} {unit} is below the minimum normal range of {green_min} {unit} "
+                    f"by {diff:.2f} {unit}. "
+                )
+                if diff < 1.0:
+                    problem_description += "This is slightly below the normal range - verify fuel quantity manually."
+                else:
+                    problem_description += "This is below the safe operating range."
+
+        error_message = f"{problem_description} " f"Expected ranges: {ranges_text}"
+
         details["range"] = "unknown"
-        return ("failed", f"Value {check_value} does not match any defined range", details)
+        details["expected_ranges"] = ranges_text
+        details["problem"] = problem_description
+        return ("failed", error_message, details)

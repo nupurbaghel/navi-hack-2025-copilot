@@ -70,6 +70,9 @@ run-checklist-debug:
 run-checklist-demo:
 	poetry run python scripts/run_checklist.py --demo
 
+run-checklist-continue:
+	poetry run python scripts/run_checklist.py --continue-on-error
+
 sh:
 	poetry shell
 

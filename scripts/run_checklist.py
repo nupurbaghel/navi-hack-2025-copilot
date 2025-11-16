@@ -22,19 +22,28 @@ console = Console()
 class ChecklistSimulator:
     """Simulates frontend checklist workflow."""
 
-    def __init__(self, base_url: str = "http://localhost:8000", debug: bool = False, demo: bool = False):
+    def __init__(
+        self,
+        base_url: str = "http://localhost:8000",
+        debug: bool = False,
+        demo: bool = False,
+        continue_on_error: bool = False,
+    ):
         """Initialize the simulator.
 
         Args:
             base_url: Base URL of the API
             debug: If True, show raw API responses
             demo: If True, show checklist items at each step with delays
+            continue_on_error: If True, continue processing steps even if one fails
         """
         self.base_url = base_url.rstrip("/")
         self.debug = debug
         self.demo = demo
+        self.continue_on_error = continue_on_error
         self.checklist_id: Optional[str] = None
         self.steps: list = []
+        self.failed_steps: list = []
 
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Optional[Dict]:
         """Make an API request and return the JSON response.
@@ -222,19 +231,41 @@ class ChecklistSimulator:
                 # Check if we should continue
                 status = status_data.get("status")
                 if status in ("warning", "failed"):
-                    console.print(
-                        f"[red]⚠ Checklist blocked at step {step_id}. "
-                        f"Status: {status}[/red]"
-                    )
-                    console.print("[yellow]Please address the issue before continuing.[/yellow]\n")
-                    break
+                    self.failed_steps.append({"step_id": step_id, "step_name": step_name, "status": status})
+
+                    if not self.continue_on_error:
+                        console.print(f"[red]⚠ Checklist blocked at step {step_id}. " f"Status: {status}[/red]")
+                        console.print("[yellow]Please address the issue before continuing.[/yellow]")
+                        console.print("[dim]Use --continue-on-error to proceed despite errors.[/dim]\n")
+                        break
+                    else:
+                        console.print(
+                            f"[yellow]⚠ Step {step_id} failed, but continuing due to --continue-on-error flag[/yellow]\n"
+                        )
 
                 # If no next step, we're done
-                if not status_data.get("next_step_id"):
+                next_step_id = status_data.get("next_step_id")
+                if not next_step_id:
+                    # If continuing on error and we're not at the last step, try to get next step manually
+                    if self.continue_on_error and i < len(self.steps):
+                        # Continue to next step in list
+                        continue
                     break
             else:
+                self.failed_steps.append({"step_id": step_id, "step_name": step_name, "status": "error"})
                 console.print(f"[red]Failed to process step {step_id}[/red]\n")
-                break
+                if not self.continue_on_error:
+                    break
+
+        # Show summary of failed steps if any
+        if self.failed_steps:
+            console.print("\n[bold yellow]Summary of Failed Steps:[/bold yellow]")
+            for failed in self.failed_steps:
+                console.print(
+                    f"  [red]✗[/red] {failed.get('step_name', failed.get('step_id'))} "
+                    f"({failed.get('step_id')}) - Status: {failed.get('status', 'error')}"
+                )
+            console.print()
 
         # Complete checklist
         if self.checklist_id:
@@ -246,12 +277,19 @@ class ChecklistSimulator:
             )
 
             if complete_result:
-                console.print("[green]✓ Checklist completed successfully![/green]")
+                if self.failed_steps:
+                    console.print(
+                        f"[yellow]⚠ Checklist completed with {len(self.failed_steps)} failed step(s)[/yellow]"
+                    )
+                else:
+                    console.print("[green]✓ Checklist completed successfully![/green]")
                 console.print(
                     f"[dim]Completed {complete_result.get('completed_steps', 0)}/"
                     f"{complete_result.get('total_steps', 0)} steps[/dim]"
                 )
-                console.print(f"[green]{complete_result.get('message', '')}[/green]\n")
+                if not self.failed_steps:
+                    console.print(f"[green]{complete_result.get('message', '')}[/green]")
+                console.print()
             else:
                 console.print("[red]Failed to complete checklist[/red]\n")
 
@@ -275,6 +313,12 @@ Examples:
   # Run with both debug and demo
   python scripts/run_checklist.py --debug --demo
 
+  # Continue even if steps fail (useful for testing)
+  python scripts/run_checklist.py --continue-on-error
+
+  # Combine all options
+  python scripts/run_checklist.py --debug --demo --continue-on-error
+
   # Use different API URL
   python scripts/run_checklist.py --url http://localhost:8080
         """,
@@ -294,6 +338,11 @@ Examples:
         action="store_true",
         help="Run in demo mode with step-by-step display and delays",
     )
+    parser.add_argument(
+        "--continue-on-error",
+        action="store_true",
+        help="Continue processing steps even if one fails (useful for testing/demos)",
+    )
 
     args = parser.parse_args()
 
@@ -301,6 +350,7 @@ Examples:
         base_url=args.url,
         debug=args.debug,
         demo=args.demo,
+        continue_on_error=args.continue_on_error,
     )
 
     try:
@@ -312,6 +362,7 @@ Examples:
         console.print(f"\n[red]Error: {e}[/red]")
         if args.debug:
             import traceback
+
             console.print(traceback.format_exc())
         sys.exit(1)
 

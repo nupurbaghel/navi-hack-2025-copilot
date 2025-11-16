@@ -269,7 +269,7 @@ def create_checklist_endpoints(app: FastAPI):
                     message=message,
                 )
             else:
-                # Failed validation
+                # Failed validation - use the detailed message from validator
                 return ChecklistStatusResponse(
                     step_id=step_id,
                     status="failed",
