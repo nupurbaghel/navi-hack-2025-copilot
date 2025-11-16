@@ -27,7 +27,308 @@ except ImportError:
     TTS_AVAILABLE = False
     ElevenLabsTTS = None
 
+# Try to import Textual for TUI, but make it optional
+try:
+    from textual.app import App, ComposeResult
+    from textual.containers import Container
+    from textual.widgets import DataTable, Footer, Header, Static
+    from textual.binding import Binding
+
+    TEXTUAL_AVAILABLE = True
+except ImportError:
+    TEXTUAL_AVAILABLE = False
+
 console = Console()
+
+
+class ChecklistTUI(App):
+    """Textual TUI for checklist demo mode."""
+
+    CSS = """
+#checklist-header {
+    height: 3;
+    border: solid $primary;
+    background: $surface;
+}
+
+#checklist-progress {
+    height: 1;
+    border: solid $primary;
+    background: $surface;
+}
+
+#checklist-steps {
+    height: 60%;
+    border: solid $primary;
+    background: $surface;
+}
+
+#checklist-details {
+    height: 35%;
+    border: solid $primary;
+    background: $surface;
+}
+
+.status-success {
+    color: green;
+}
+
+.status-caution {
+    color: yellow;
+}
+
+.status-warning {
+    color: orange;
+}
+
+.status-failed {
+    color: red;
+}
+
+.status-pending {
+    color: dimgrey;
+}
+"""
+
+    BINDINGS = [
+        Binding("q", "quit", "Quit"),
+        Binding("r", "refresh", "Refresh"),
+    ]
+
+    def __init__(self, simulator: "ChecklistSimulator"):
+        """Initialize TUI with simulator reference.
+
+        Args:
+            simulator: ChecklistSimulator instance
+        """
+        super().__init__()
+        self.simulator = simulator
+        self.current_step_index = 0
+        self.step_statuses = {}  # step_id -> status dict
+
+    def compose(self) -> ComposeResult:
+        """Create child widgets for the app."""
+        yield Header(show_clock=True)
+        yield Container(
+            Static("Pre-Flight Checklist", id="checklist-header"),
+            Static("Progress: 0/0", id="checklist-progress"),
+            DataTable(id="checklist-steps"),
+            Static("Details will appear here...", id="checklist-details"),
+        )
+        yield Footer()
+
+    def on_mount(self) -> None:
+        """Called when app starts."""
+        table = self.query_one("#checklist-steps", DataTable)
+        table.add_columns("Step", "Name", "Status", "Message")
+        table.cursor_type = "row"
+
+        # Initialize with all steps
+        for step in self.simulator.steps:
+            step_id = step["step_id"]
+            step_name = step.get("name", step_id)
+            table.add_row("○", step_name, "Pending", "", key=step_id)
+
+        self.update_progress()
+
+        # Start the workflow as an async task
+        self.current_step_index = 0
+        self.call_later(self._run_workflow)
+
+    def update_progress(self):
+        """Update progress indicator."""
+        total = len(self.simulator.steps)
+        completed = sum(
+            1 for s in self.step_statuses.values() if s.get("status") in ("success", "caution", "warning", "failed")
+        )
+        progress_widget = self.query_one("#checklist-progress", Static)
+        progress_widget.update(f"Progress: {completed}/{total} steps completed")
+
+    def update_step_status(self, step_id: str, status_data: Dict):
+        """Update status for a specific step.
+
+        Args:
+            step_id: Step ID
+            status_data: Status data from API
+        """
+        table = self.query_one("#checklist-steps", DataTable)
+        details_widget = self.query_one("#checklist-details", Static)
+
+        status = status_data.get("status", "unknown")
+        message = status_data.get("message", "")
+        error = status_data.get("error", "")
+
+        # Update step icon and status
+        status_icons = {
+            "success": "✓",
+            "caution": "⚠",
+            "warning": "✗",
+            "failed": "✗",
+            "no_data": "?",
+            "pending": "○",
+            "running": "⟳",
+        }
+
+        icon = status_icons.get(status, "?")
+        step_info = next((s for s in self.simulator.steps if s["step_id"] == step_id), None)
+        step_name = step_info.get("name", step_id) if step_info else step_id
+
+        # Update row - find row by key and update
+        row_key = step_id
+        try:
+            # In Textual 6.x, we can access rows directly
+            # Try to get row index from the row key
+            row_index = None
+            # Access rows via the internal structure
+            if hasattr(table, "rows") and row_key in table.rows:
+                # Get the row index
+                row_keys = list(table.rows.keys())
+                if row_key in row_keys:
+                    row_index = row_keys.index(row_key)
+
+            if row_index is not None:
+                # Update cells using column index
+                table.update_cell_at((row_index, 0), icon)  # Step column
+                table.update_cell_at((row_index, 2), status.upper())  # Status column
+                table.update_cell_at(
+                    (row_index, 3), message[:50] + "..." if len(message) > 50 else message
+                )  # Message column
+        except (AttributeError, IndexError, KeyError, TypeError):
+            # If update fails, row might not exist yet or API changed - this is OK
+            pass
+
+        # Update details
+        details_text = f"[bold]{step_name}[/bold]\n\n"
+        details_text += f"Status: [{self._get_status_style(status)}]{status.upper()}[/]\n"
+        if message:
+            details_text += f"\n{message}\n"
+        if error:
+            details_text += f"\n[red]Error: {error}[/red]\n"
+
+        details_widget.update(details_text)
+
+        # Store status
+        self.step_statuses[step_id] = status_data
+        self.update_progress()
+
+        # Highlight current row - find row index and set cursor
+        try:
+            row_index = None
+            if hasattr(table, "rows") and row_key in table.rows:
+                row_keys = list(table.rows.keys())
+                if row_key in row_keys:
+                    row_index = row_keys.index(row_key)
+            if row_index is not None:
+                table.cursor_row = row_index
+        except (AttributeError, IndexError, KeyError, TypeError):
+            pass
+
+    def _get_status_style(self, status: str) -> str:
+        """Get style class for status.
+
+        Args:
+            status: Status string
+
+        Returns:
+            Style class name
+        """
+        status_styles = {
+            "success": "green",
+            "caution": "yellow",
+            "warning": "orange",
+            "failed": "red",
+            "no_data": "dim",
+            "pending": "dim",
+        }
+        return status_styles.get(status, "white")
+
+    def action_quit(self) -> None:
+        """Quit the app."""
+        self.exit()
+
+    def action_refresh(self) -> None:
+        """Refresh the display."""
+        self.update_progress()
+
+    async def _run_workflow(self):
+        """Run the checklist workflow asynchronously."""
+        import asyncio
+
+        # Process each step
+        for step in self.simulator.steps:
+            step_id = step["step_id"]
+            step_name = step.get("name", step_id)
+
+            # Update TUI to show current step is running
+            self.update_step_status(step_id, {"status": "running", "message": "Processing..."})
+
+            # Process step in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            status_data = await loop.run_in_executor(None, self.simulator.process_step, step_id)
+
+            if status_data:
+                # Update TUI with status
+                self.update_step_status(step_id, status_data)
+
+                # Check if we should continue
+                status = status_data.get("status")
+                if status in ("warning", "failed"):
+                    self.simulator.failed_steps.append({"step_id": step_id, "step_name": step_name, "status": status})
+
+                    if not self.simulator.continue_on_error:
+                        # Show error in TUI
+                        details_widget = self.query_one("#checklist-details", Static)
+                        details_widget.update(
+                            f"[red]⚠ Checklist blocked at step {step_id}. Status: {status}[/red]\n"
+                            "[yellow]Press 'q' to quit[/yellow]"
+                        )
+                        return
+
+                # Small delay for visual feedback
+                await asyncio.sleep(1.0)
+
+                # If no next step, we're done
+                next_step_id = status_data.get("next_step_id")
+                if not next_step_id:
+                    break
+            else:
+                self.simulator.failed_steps.append({"step_id": step_id, "step_name": step_name, "status": "error"})
+                self.update_step_status(step_id, {"status": "error", "message": "Failed to process step"})
+                if not self.simulator.continue_on_error:
+                    return
+
+        # Complete checklist
+        await self._complete_checklist()
+
+    async def _complete_checklist(self):
+        """Complete the checklist."""
+        if self.simulator.checklist_id:
+            # Use the public method to make request
+            import asyncio
+
+            loop = asyncio.get_event_loop()
+            complete_result = await loop.run_in_executor(
+                None,
+                lambda: self.simulator._make_request(  # noqa: SLF001
+                    "POST",
+                    "/checklist/complete",
+                    json={"checklist_id": self.simulator.checklist_id},
+                ),
+            )
+
+            if complete_result:
+                details_widget = self.query_one("#checklist-details", Static)
+                if self.simulator.failed_steps:
+                    summary = (
+                        f"[yellow]⚠ Checklist completed with {len(self.simulator.failed_steps)} failed step(s)[/yellow]"
+                    )
+                else:
+                    summary = "[green]✓ Checklist completed successfully![/green]"
+                summary += f"\n[dim]Completed {complete_result.get('completed_steps', 0)}/{complete_result.get('total_steps', 0)} steps[/dim]"
+                if not self.simulator.failed_steps:
+                    summary += f"\n[green]{complete_result.get('message', '')}[/green]"
+
+                details_widget.update(summary)
 
 
 class ChecklistSimulator:
@@ -324,6 +625,22 @@ class ChecklistSimulator:
             console.print("[red]Failed to start checklist[/red]")
             sys.exit(1)
 
+        # Use TUI if available and in demo mode
+        if self.demo and TEXTUAL_AVAILABLE:
+            self._run_with_tui()
+        else:
+            self._run_normal()
+
+    def _run_with_tui(self):
+        """Run checklist workflow with Textual TUI."""
+        app = ChecklistTUI(self)
+        app.simulator = self  # Store reference for async access
+
+        # Run the TUI app (this will start the async event loop)
+        app.run()
+
+    def _run_normal(self):
+        """Run checklist workflow in normal (non-TUI) mode."""
         if self.demo:
             console.print("[bold]Running in demo mode - showing each step with delays[/bold]\n")
 
