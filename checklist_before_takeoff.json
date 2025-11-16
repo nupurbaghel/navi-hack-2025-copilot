@@ -1,0 +1,116 @@
+[
+  {
+    "step_id": "step_1",
+    "name": "Fuel Quantity",
+    "description": "Confirm fuel quantity is adequate for flight.",
+    "expected_value": "10-28 gallons (green range)",
+    "telemetry_columns": [
+      "FQtyL",
+      "FQtyR"
+    ],
+    "validation_logic": "Sum of FQtyL and FQtyR should be in green range (10-28 gallons).",
+    "states": {
+      "green": {
+        "min": 10,
+        "max": 28
+      },
+      "yellow": {
+        "min": 0,
+        "max": 10
+      },
+      "red": null,
+      "unit": "gallons"
+    }
+  },
+  {
+    "step_id": "step_2",
+    "name": "Oil Pressure",
+    "description": "Check engine oil pressure is within normal range.",
+    "expected_value": "55-95 psi (green range)",
+    "telemetry_columns": [
+      "E1 OilP"
+    ],
+    "validation_logic": "E1 OilP should be between 55-95 psi for normal operation.",
+    "states": {
+      "green": {
+        "min": 55,
+        "max": 95
+      },
+      "yellow": {
+        "min": 25,
+        "max": 55
+      },
+      "red": {
+        "min": 0,
+        "max": 25
+      },
+      "unit": "psi"
+    }
+  },
+  {
+    "step_id": "step_3",
+    "name": "Oil Temperature",
+    "description": "Verify oil temperature is within limits.",
+    "expected_value": "100-235 \u00b0F (green range)",
+    "telemetry_columns": [
+      "E1 OilT"
+    ],
+    "validation_logic": "E1 OilT should be between 100-235 \u00b0F for normal operation.",
+    "states": {
+      "green": {
+        "min": 100,
+        "max": 235
+      },
+      "yellow": null,
+      "red": {
+        "min": 235,
+        "max": null
+      },
+      "unit": "\u00b0F"
+    }
+  },
+  {
+    "step_id": "step_4",
+    "name": "Engine RPM",
+    "description": "Ensure engine RPM is within normal operating range.",
+    "expected_value": "0-2700 RPM (green range)",
+    "telemetry_columns": [
+      "E1 RPM"
+    ],
+    "validation_logic": "E1 RPM should be less than or equal to 2700 RPM.",
+    "states": {
+      "green": {
+        "min": 0,
+        "max": 2700
+      },
+      "yellow": null,
+      "red": {
+        "min": 2700,
+        "max": null
+      },
+      "unit": "RPM"
+    }
+  },
+  {
+    "step_id": "step_5",
+    "name": "Manifold Pressure",
+    "description": "Check manifold pressure is within normal range.",
+    "expected_value": "15-29.5 inHg (green range)",
+    "telemetry_columns": [
+      "E1 MAP"
+    ],
+    "validation_logic": "E1 MAP should be between 15-29.5 inHg for normal operation.",
+    "states": {
+      "green": {
+        "min": 15,
+        "max": 29.5
+      },
+      "yellow": null,
+      "red": {
+        "min": 29.5,
+        "max": null
+      },
+      "unit": "inHg"
+    }
+  }
+]
