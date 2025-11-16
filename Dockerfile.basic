@@ -1,24 +1,30 @@
-FROM python:latest
+FROM python:3.13-slim
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONFAULTHANDLER 1
-
 ENV PYTHONUNBUFFERED 1
 ENV POETRY_HOME "/opt/poetry"
 ENV POETRY_VIRTUALENVS_IN_PROJECT 1
 ENV POETRY_NO_INTERACTION 1
 ENV PATH="/.venv/bin:${POETRY_HOME}/bin:$PATH"
 
-RUN curl -sSL https://install.python-poetry.org | python3 - -y \
-    && chmod 755 ${POETRY_HOME}/bin/poetry
+# Install poetry
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    curl -sSL https://install.python-poetry.org | python3 - -y && \
+    chmod 755 ${POETRY_HOME}/bin/poetry && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies
 COPY poetry.lock pyproject.toml ./
-# RUN poetry install --only main --no-root --no-ansi
 RUN ${POETRY_HOME}/bin/poetry install --only main --no-root --no-ansi
 
 WORKDIR /app
 
-COPY . .
+# Copy application code
+COPY aviation_hackathon_sf/ ./aviation_hackathon_sf/
 
-CMD poetry run uvicorn aviation_hackathon_sf.main:app --reload
+EXPOSE 8000
+
+CMD ["poetry", "run", "uvicorn", "aviation_hackathon_sf.main:app", "--host", "0.0.0.0", "--port", "8000"]

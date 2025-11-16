@@ -46,8 +46,6 @@ optional = true
 [tool.poetry.group.docs.dependencies]
 Sphinx = "^8.2.3"
 
-[tool.poetry.scripts]
-inbound-tasks-api = "lineage.queue.inbound_tasks_api:api"
 
 [build-system]
 requires = ["poetry-core"]

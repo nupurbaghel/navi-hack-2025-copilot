@@ -240,7 +240,7 @@ def create_checklist_endpoints(app: FastAPI):
         # Validate against telemetry data
         validator = get_telemetry_validator()
         if validator:
-            status, message, details = validator.validate_step(step)
+            status, message, _details = validator.validate_step(step)
             logger.info(f"Status check for step {step_id} (checklist {checklist_id}): {status} - {message}")
 
             # Determine if we can proceed to next step

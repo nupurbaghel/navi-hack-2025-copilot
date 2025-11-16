@@ -1,42 +1,36 @@
-from typing import Union
-
 from fastapi import FastAPI
-from pydantic import BaseModel
 
-from aviation_hackathon_sf import performer
 from aviation_hackathon_sf.checklist_api import create_checklist_endpoints
 
-app = FastAPI(title="Aviation Hackathon SF - Co-Pilot Assistant API")
+app = FastAPI(
+    title="Aviation Hackathon SF - Co-Pilot Assistant API",
+    description="AI-powered co-pilot assistant for pre-flight checklist validation using flight telemetry data",
+    version="0.1.0",
+)
 
 # Register checklist endpoints
 create_checklist_endpoints(app)
 
 
-class Item(BaseModel):
-    name: str
-    price: float
-    is_offer: Union[bool, None] = None
-
-
 @app.get("/")
 def read_root():
+    """Root endpoint with API information."""
     return {
-        "Hello": "World",
-        "something": performer.perform_something(),
-        "api": "Aviation Hackathon SF - Co-Pilot Assistant",
+        "name": "Aviation Hackathon SF - Co-Pilot Assistant",
+        "description": "AI-powered co-pilot assistant for pre-flight checklist validation",
+        "version": "0.1.0",
+        "endpoints": {
+            "docs": "/docs",
+            "redoc": "/redoc",
+            "checklist_start": "POST /checklist/start",
+            "checklist_next": "GET /checklist/next/{step_id}",
+            "checklist_status": "GET /checklist/status/{step_id}",
+            "checklist_complete": "POST /checklist/complete",
+        },
     }
 
 
-@app.get("/ping")
-def ping():
-    return "pong"
-
-
-@app.get("/items/{item_id}")
-def read_item(item_id: int, q: Union[str, None] = None):
-    return {"item_id": item_id, "q": q}
-
-
-@app.put("/items/{item_id}")
-def update_item(item_id: int, item: Item):
-    return {"item_name": item.name, "item_id": item_id}
+@app.get("/health")
+def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}

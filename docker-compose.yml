@@ -7,21 +7,18 @@ services:
       dockerfile: Dockerfile.basic
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - FLIGHT_DATA_CSV=${FLIGHT_DATA_CSV:-/app/flight_data.csv}
     ports:
       - "8000:8000"
     volumes:
+      # Mount data files for runtime access
       - ./sr20.md:/app/sr20.md:ro
-      - ./checklist_before_takeoff.json:/app/checklist_before_takeoff.json
+      - ./checklist_before_takeoff.json:/app/checklist_before_takeoff.json:ro
       - ./flight_data.csv:/app/flight_data.csv:ro
-    depends_on:
-      - redis
-
-  redis:
-    image: "redis:alpine"
-    command: redis-server --include /usr/local/etc/redis/redis.conf
-    restart: always
-    ports:
-      - "6379:6379"
-    volumes:
-      - ./redis-data:/data
-      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
