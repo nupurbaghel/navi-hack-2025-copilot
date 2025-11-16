@@ -14,7 +14,11 @@ profile = 'black'
 name = "aviation-hackathon-sf"
 version = "0.0.1"
 description = "aviation-hackathon-sf code base"
-authors = ["Shubham Chaudhary <shubham@chaudhary.xyz>", "Nupur Baghel", "Chelsey"]
+authors = [
+    "Shubham Chaudhary <shubham@chaudhary.xyz>",
+    "Nupur Baghel",
+    "Chelsey",
+]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -25,9 +29,9 @@ python-dotenv = "^1.2.1"
 uvicorn = "^0.38.0"
 fastapi = "^0.121.2"
 pydantic = "^2.12.4"
-langchain = "^0.3.0"
-langchain-openai = "^0.2.0"
-openai = "^1.54.0"
+langchain = "^1.0.7"
+langchain-openai = "^1.0.3"
+openai = "^2.8.0"
 
 
 [tool.poetry.group.dev.dependencies]
