@@ -54,28 +54,49 @@ class TelemetryValidator:
                         normalized_row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
                         all_rows.append(normalized_row)
 
-                # Filter to pre-flight data only (AltInd == 0 or empty)
-                # This matches the FlightDataFilter.filter_preflight_only() logic
+                # Filter to pre-flight data: engine running but still on ground
+                # Pre-flight checklist happens when engine is running but aircraft hasn't taken off
+                # This matches the concept from FlightDataFilter but inverted - we want pre-flight WITH engine running
                 self._data = []
                 for row in all_rows:
                     alt_ind_str = row.get("AltInd", "").strip()
-                    if not alt_ind_str:
-                        # Empty AltInd means pre-flight
-                        self._data.append(row)
-                    else:
-                        try:
+                    rpm_str = row.get("E1 RPM", "").strip()
+                    fflow_str = row.get("E1 FFlow", "").strip()
+                    gndspd_str = row.get("GndSpd", "").strip()
+
+                    try:
+                        # Parse altitude - on ground means low altitude (< 50 feet) or empty/0
+                        if not alt_ind_str:
+                            alt_ind = 0  # Empty means on ground
+                        else:
                             alt_ind = float(alt_ind_str)
-                            if alt_ind == 0:
-                                # AltInd == 0 means pre-flight (on ground)
-                                self._data.append(row)
-                        except (ValueError, TypeError):
-                            # If we can't parse, treat as pre-flight (conservative)
+
+                        # Parse engine parameters
+                        rpm = float(rpm_str) if rpm_str else 0
+                        fflow = float(fflow_str) if fflow_str else 0
+                        gndspd = float(gndspd_str) if gndspd_str else 0
+
+                        # Pre-flight condition: on ground (low altitude) AND engine running
+                        # Engine running means: RPM >= 100 (idle or above) AND (fuel flowing OR moving)
+                        is_on_ground = alt_ind < 50  # Less than 50 feet = on ground
+                        is_engine_running = rpm >= 100 and (fflow > 0 or gndspd >= 0.5)
+
+                        if is_on_ground and is_engine_running:
+                            # This is pre-flight with engine running - perfect for checklist validation
+                            self._data.append(row)
+                        elif is_on_ground and rpm == 0:
+                            # Engine off but on ground - might be early pre-flight, include it
+                            # (some checklist items can be checked before engine start)
+                            self._data.append(row)
+                    except (ValueError, TypeError):
+                        # If we can't parse, check if AltInd is empty (conservative - include it)
+                        if not alt_ind_str:
                             self._data.append(row)
 
                 rows_filtered = len(all_rows) - len(self._data)
                 logger.info(
                     f"Loaded {len(all_rows)} total rows, filtered to {len(self._data)} pre-flight rows "
-                    f"(removed {rows_filtered} in-flight/taxi rows)"
+                    f"(engine running on ground or engine off on ground, removed {rows_filtered} in-flight rows)"
                 )
         except Exception as e:
             logger.error(f"Error loading CSV: {e}")
