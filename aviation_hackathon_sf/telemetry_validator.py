@@ -122,7 +122,14 @@ class TelemetryValidator:
         return len(self._data) if self._data else 0
 
     def get_latest_row(self) -> Optional[Dict]:
-        """Get the latest (most recent) row of telemetry data.
+        """Get the best row for pre-flight checklist validation.
+
+        For pre-flight checklists, we want a row where:
+        - Engine is running (RPM > 0)
+        - Aircraft is on ground (low altitude)
+        - Engine is at idle or low power (not at takeoff power)
+
+        If no such row exists, falls back to the last row.
 
         Returns:
             Dictionary of column values, or None if no data
@@ -130,7 +137,20 @@ class TelemetryValidator:
         if not self._data or len(self._data) == 0:
             return None
 
-        # Return the last row (most recent data)
+        # Try to find a row with engine running at idle/low power (RPM 500-2000)
+        # This is more appropriate for pre-flight checklist validation
+        for row in reversed(self._data):  # Start from most recent and work backwards
+            rpm_str = row.get("E1 RPM", "").strip()
+            if rpm_str:
+                try:
+                    rpm = float(rpm_str)
+                    # Engine running at idle or low power (not at takeoff)
+                    if 500 <= rpm <= 2000:
+                        return row
+                except (ValueError, TypeError):
+                    pass
+
+        # Fall back to last row if no suitable row found
         return self._data[-1]
 
     def get_value(self, column_name: str, row: Optional[Dict] = None) -> Optional[float]:
@@ -241,18 +261,20 @@ class TelemetryValidator:
             if red_min is not None and red_max is not None:
                 in_red = red_min <= check_value <= red_max
             elif red_min is not None:
-                in_red = check_value < red_min
+                # If only red_min is set, values >= red_min are in red range
+                in_red = check_value >= red_min
             elif red_max is not None:
-                in_red = check_value > red_max
+                # If only red_max is set, values <= red_max are in red range
+                in_red = check_value <= red_max
 
             if in_red:
                 details["range"] = "red"
                 if red_min is not None and red_max is not None:
                     details["range_description"] = f"In red range ({red_min}-{red_max} {states.get('unit', '')})"
                 elif red_min is not None:
-                    details["range_description"] = f"Below red minimum ({red_min} {states.get('unit', '')})"
+                    details["range_description"] = f"At or above red minimum ({red_min} {states.get('unit', '')})"
                 else:
-                    details["range_description"] = f"Above red maximum ({red_max} {states.get('unit', '')})"
+                    details["range_description"] = f"At or below red maximum ({red_max} {states.get('unit', '')})"
                 return ("warning", f"WARNING: {value_description} - In warning range", details)
 
         # Check yellow range
@@ -267,14 +289,18 @@ class TelemetryValidator:
                         f"In yellow range ({yellow_min}-{yellow_max} {states.get('unit', '')})"
                     )
                     return ("caution", f"CAUTION: {value_description} - Requires attention", details)
-            elif yellow_min is not None and check_value < yellow_min:
-                details["range"] = "yellow"
-                details["range_description"] = f"Below yellow minimum ({yellow_min} {states.get('unit', '')})"
-                return ("caution", f"CAUTION: {value_description} - Below normal minimum", details)
-            elif yellow_max is not None and check_value > yellow_max:
-                details["range"] = "yellow"
-                details["range_description"] = f"Above yellow maximum ({yellow_max} {states.get('unit', '')})"
-                return ("caution", f"CAUTION: {value_description} - Above normal maximum", details)
+            elif yellow_min is not None:
+                # If only yellow_min is set, values < yellow_min are in yellow range
+                if check_value < yellow_min:
+                    details["range"] = "yellow"
+                    details["range_description"] = f"Below yellow minimum ({yellow_min} {states.get('unit', '')})"
+                    return ("caution", f"CAUTION: {value_description} - Below normal minimum", details)
+            elif yellow_max is not None:
+                # If only yellow_max is set, values > yellow_max are in yellow range
+                if check_value > yellow_max:
+                    details["range"] = "yellow"
+                    details["range_description"] = f"Above yellow maximum ({yellow_max} {states.get('unit', '')})"
+                    return ("caution", f"CAUTION: {value_description} - Above normal maximum", details)
 
         # Check green range (normal operation)
         green_range = states.get("green")
