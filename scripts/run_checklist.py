@@ -474,7 +474,7 @@ class ChecklistSimulator:
                 except Exception as e:
                     logger.warning(f"TTS failed for announcement: {e}")
 
-            time.sleep(0.1)  # Simulate processing time
+            time.sleep(1)  # Simulate processing time
 
         # Call /checklist/next to start processing
         next_result = self._make_request(
